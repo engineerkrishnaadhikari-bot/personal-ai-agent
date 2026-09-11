@@ -2,19 +2,25 @@ from typing import Any
 
 import httpx
 
+from app.config import get_settings
+
 
 class OllamaClient:
     """Client for communicating with a local Ollama server."""
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:11434",
-        model: str = "qwen3:1.7b",
-        timeout: float = 120.0,
+        base_url: str | None = None,
+        model: str | None = None,
+        timeout: float | None = None,
     ) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        self.timeout = timeout
+        settings = get_settings()
+
+        self.base_url = (
+            base_url or settings.ollama_base_url
+        ).rstrip("/")
+        self.model = model or settings.ollama_model
+        self.timeout = timeout or settings.ollama_timeout
 
     def chat(self, prompt: str) -> str:
         """Send a prompt to Ollama and return the assistant response."""
