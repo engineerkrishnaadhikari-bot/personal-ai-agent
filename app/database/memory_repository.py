@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class MemoryRepository:
-    """Local SQLite repository for agent memories."""
+    """Local SQLite repository for memories and learning records."""
 
     def __init__(self, database_path: str = "data/memory.db") -> None:
         self.database_path = Path(database_path)
@@ -28,6 +28,39 @@ class MemoryRepository:
                     user_confirmed INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mistakes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    context TEXT NOT NULL,
+                    agent_action TEXT NOT NULL,
+                    expected_result TEXT NOT NULL,
+                    actual_result TEXT NOT NULL,
+                    user_correction TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS lessons (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lesson TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    confidence REAL NOT NULL DEFAULT 0.5,
+                    importance REAL NOT NULL DEFAULT 0.5,
+                    source_mistake_id INTEGER,
+                    times_applied INTEGER NOT NULL DEFAULT 0,
+                    user_confirmed INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(source_mistake_id)
+                        REFERENCES mistakes(id)
                 )
                 """
             )
@@ -72,6 +105,93 @@ class MemoryRepository:
                     updated_at
                 FROM memories
                 ORDER BY importance DESC, updated_at DESC
+                """
+            ).fetchall()
+
+        return [dict(row) for row in rows]
+
+    def add_mistake(
+        self,
+        context: str,
+        agent_action: str,
+        expected_result: str,
+        actual_result: str,
+        user_correction: str,
+    ) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO mistakes
+                (
+                    context,
+                    agent_action,
+                    expected_result,
+                    actual_result,
+                    user_correction
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    context,
+                    agent_action,
+                    expected_result,
+                    actual_result,
+                    user_correction,
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def add_lesson(
+        self,
+        lesson: str,
+        category: str,
+        confidence: float,
+        importance: float,
+        source_mistake_id: int | None = None,
+        user_confirmed: bool = False,
+    ) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO lessons
+                (
+                    lesson,
+                    category,
+                    confidence,
+                    importance,
+                    source_mistake_id,
+                    user_confirmed
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    lesson,
+                    category,
+                    confidence,
+                    importance,
+                    source_mistake_id,
+                    int(user_confirmed),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def get_lessons(self) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    lesson,
+                    category,
+                    confidence,
+                    importance,
+                    source_mistake_id,
+                    times_applied,
+                    user_confirmed,
+                    created_at,
+                    updated_at
+                FROM lessons
+                ORDER BY confidence DESC, importance DESC, updated_at DESC
                 """
             ).fetchall()
 
